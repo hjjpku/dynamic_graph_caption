@@ -27,6 +27,7 @@ from .CaptionModel import CaptionModel
 
 def sort_pack_padded_sequence(input, lengths):
     sorted_lengths, indices = torch.sort(lengths, descending=True)
+    #Packs a Tensor containing padded sequences of variable length
     tmp = pack_padded_sequence(input[indices], sorted_lengths, batch_first=True)
     inv_ix = indices.clone()
     inv_ix[indices] = torch.arange(0,len(indices)).type_as(inv_ix)
@@ -39,6 +40,7 @@ def pad_unsort_packed_sequence(input, inv_ix):
 
 def pack_wrapper(module, att_feats, att_masks):
     if att_masks is not None:
+       # the mask issue is dealed with pack_padded_sequence and pad_packed_sequence (torch.nn.utils.rnn )
         packed, inv_ix = sort_pack_padded_sequence(att_feats, att_masks.data.long().sum(1))
         return pad_unsort_packed_sequence(PackedSequence(module(packed[0]), packed[1]), inv_ix)
     else:
@@ -68,6 +70,7 @@ class AttModel(CaptionModel):
         self.fc_embed = nn.Sequential(nn.Linear(self.fc_feat_size, self.rnn_size),
                                     nn.ReLU(),
                                     nn.Dropout(self.drop_prob_lm))
+        # att_embed is to transform the dimension of att_fea to rnn_size
         self.att_embed = nn.Sequential(*(
                                     ((nn.BatchNorm1d(self.att_feat_size),) if self.use_bn else ())+
                                     (nn.Linear(self.att_feat_size, self.rnn_size),
@@ -101,9 +104,11 @@ class AttModel(CaptionModel):
 
         # embed fc and att feats
         fc_feats = self.fc_embed(fc_feats)
+        # dealing with the mask issue for bn layers in att_embed
         att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
 
-        # Project the attention feats first to reduce memory and computation comsumptions.
+        # for attention coefficients computation: att_i,t = w_1 tanh(w_2v_i + w_3h_t)
+        # Project the attention feats first (i.e., w_2v_i) to reduce memory and computation comsumptions.
         p_att_feats = self.ctx2att(att_feats)
 
         return fc_feats, att_feats, p_att_feats, att_masks
@@ -168,7 +173,7 @@ class AttModel(CaptionModel):
             state = self.init_hidden(beam_size)
             tmp_fc_feats = p_fc_feats[k:k+1].expand(beam_size, p_fc_feats.size(1))
             tmp_att_feats = p_att_feats[k:k+1].expand(*((beam_size,)+p_att_feats.size()[1:])).contiguous()
-            tmp_p_att_feats = pp_att_feats[k:k+1].expand(*((beam_size,)+pp_att_feats.size()[1:])).contiguous()
+            tmp_p_att_feats = pp_att_feats[k:k+1].expand(*((beam_size,)+pp_att_feats.size()[1:])).contiguous() if pp_att_feats is not None else None
             tmp_att_masks = p_att_masks[k:k+1].expand(*((beam_size,)+p_att_masks.size()[1:])).contiguous() if att_masks is not None else None
 
             for t in range(1):

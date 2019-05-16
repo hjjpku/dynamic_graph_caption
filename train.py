@@ -22,6 +22,7 @@ import misc.utils as utils
 from misc.rewards import init_scorer, get_self_critical_reward
 from misc.loss_wrapper import LossWrapper
 
+
 try:
     import tensorboardX as tb
 except ImportError:
@@ -36,7 +37,7 @@ def train(opt):
     # Deal with feature things before anything
     opt.use_fc, opt.use_att = utils.if_use_feat(opt.caption_model)
     if opt.use_box: opt.att_feat_size = opt.att_feat_size + 5
-
+    print(opt)
     loader = DataLoader(opt)
     opt.vocab_size = loader.vocab_size
     opt.seq_length = loader.seq_length

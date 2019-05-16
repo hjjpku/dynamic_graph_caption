@@ -99,7 +99,7 @@ class AttGraphModel(AttModel):
         self.use_graph = opt.use_graph
         self.num_layers = 2 # keep the same with topdown
         self.p_dim = opt.p_dim if self.use_proj else opt.rnn_size  # dimension of the graph embeddings
-        self.p_dim = opt.rnn_size if (not self.use_graph) or (self.use_graph and opt.gcn_pool == 'att') else self.p_dim
+        self.p_dim = opt.rnn_size if (not self.use_graph) or self.use_bn or (self.use_graph and opt.gcn_pool == 'att') else self.p_dim
         '''
         self.p_dim = opt.rnn_size if self.use_bn else opt.p_dim # dimension of the graph embeddings
         if opt.p_dim != opt.rnn_size:
@@ -109,10 +109,11 @@ class AttGraphModel(AttModel):
         #keep fc_embed temporally
         # add project_net
         if self.use_proj:
-            self.project_net = ProjectNet(self.num_k, self.att_feat_size)
-            self.graph_embed = nn.Sequential(nn.Linear(self.att_feat_size, self.p_dim),
-                                    nn.ReLU(),
-                                    nn.Dropout(self.drop_prob_lm))
+            self.project_net = ProjectNet(self.num_k, self.p_dim)
+            if not self.use_bn:
+                self.graph_embed = nn.Sequential(nn.Linear(self.att_feat_size, self.p_dim),
+                                        nn.ReLU(),
+                                        nn.Dropout(self.drop_prob_lm))
 
         if self.use_graph:
             del self.ctx2att
@@ -138,8 +139,11 @@ class AttGraphModel(AttModel):
 
         if self.use_proj:
             # graph_embed has a fixed number of nodes
-            graph_embed_p = self.project_net.forward(att_feats, att_masks)
-            graph_embed = self.graph_embed(graph_embed_p)
+            if not self.use_bn:
+                graph_embed_t = self.graph_embed(att_feats)
+                att_feats = graph_embed_t
+            graph_embed = self.project_net.forward(att_feats, att_masks)
+
             att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
             if self.use_graph:
                 return fc_feats, graph_embed, pp_att_feats, att_masks #is none
