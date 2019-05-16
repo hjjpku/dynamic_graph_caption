@@ -129,21 +129,19 @@ class AttGraphModel(AttModel):
 
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
         graph_embed, pp_att_feats =  None, None
-
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
 
         fc_feats = self.fc_embed(fc_feats)
         # dealing with the mask issue for bn layers in att_embed
         if self.use_bn or not self.use_proj:
             att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
-
         if self.use_proj:
             # graph_embed has a fixed number of nodes
             if not self.use_bn:
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
             graph_embed = self.project_net.forward(att_feats, att_masks)
-
+	
             att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
             if self.use_graph:
                 return fc_feats, graph_embed, pp_att_feats, att_masks #is none

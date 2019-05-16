@@ -208,8 +208,9 @@ class DataLoader(data.Dataset):
         for i in range(len(att_batch)):
             data['att_masks'][i*seq_per_img:(i+1)*seq_per_img, :att_batch[i].shape[0]] = 1
         # set att_masks to None if attention features have same length
-        if data['att_masks'].sum() == data['att_masks'].size:
-            data['att_masks'] = None
+        #if data['att_masks'].sum() == data['att_masks'].size:
+         #   data['att_masks'] = None
+
 
         data['labels'] = np.vstack(label_batch)
         # generate mask

@@ -16,7 +16,7 @@ import traceback
 import opts
 import models
 from dataloader import *
-import skimage.io
+#import skimage.io
 import eval_utils
 import misc.utils as utils
 from misc.rewards import init_scorer, get_self_critical_reward
