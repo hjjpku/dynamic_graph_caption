@@ -24,7 +24,7 @@ def parse_opt():
                     help='Cached token file for calculating cider score during self critical training.')
 
     # Model settings
-    parser.add_argument('--caption_model', type=str, default="show_tell",
+    parser.add_argument('--caption_model', type=str, default="topdown",
                     help='show_tell, show_attend_tell, all_img, fc, att2in, att2in2, att2all2, adaatt, adaattmo, topdown, stackatt, denseatt, transformer')
     parser.add_argument('--rnn_size', type=int, default=512,
                     help='size of the rnn in number of hidden nodes in each layer')
@@ -150,6 +150,31 @@ def parse_opt():
                     help='The reward weight from cider')
     parser.add_argument('--bleu_reward_weight', type=float, default=0,
                     help='The reward weight from bleu4')
+
+    # AttGraphModel
+    #projection cfg
+    parser.add_argument('--use_proj', type=bool, default=False,
+                        help = 'use projection function to get semantic nodes')
+    parser.add_argument('--p_dim', type=int, default=1024,
+                        help = 'dimension of the semantic nodes after projection')
+    parser.add_argument('--num_k', type=int, default=20,
+                        help = 'number of centers for projection')
+
+    #gcn cfg
+    parser.add_argument('--use_graph', type=bool, default=False,
+                        help = 'use gcn for attention module in decoding')
+    parser.add_argument('--gcn_dropout', type=float, default=0.5,
+                        help = 'dropout for the linear modules in the gcn')
+    parser.add_argument('--gcn_relu', type=str, default='relu',
+                        help = 'type of relu in gcn, relu or lrelu(leaky_relu)')
+    parser.add_argument('--topk', type=float, default=0.25,
+                        help = 'ratio of top ranked edges to keep')
+    parser.add_argument('--norm_type', type=str, default='row',
+                        help = 'normalization type for adj, row or global')
+    parser.add_argument('--layer_num', type=int, default=3,
+                        help = 'number of gcn layers in the gcn')
+    parser.add_argument('--gcn_pool', type=str, default='att',
+                        help = 'gcn pooling type, max or mean or att')
 
     args = parser.parse_args()
 
