@@ -90,6 +90,12 @@ parser.add_argument('--verbose_beam', type=int, default=1,
 parser.add_argument('--verbose_loss', type=int, default=0, 
                 help='if we need to calculate loss.')
 
+# vis soft-assign
+parser.add_argument('--vis_soft_assign', type=bool, default=False,
+                help='visualize soft assign matrix')
+parser.add_argument('--vis_dir', type=str, default=None,
+                help='dir to save soft assign matrix')
+
 opt = parser.parse_args()
 
 # Load infos
@@ -110,6 +116,9 @@ if len(opt.id) == 0:
     opt.id = infos['opt'].id
 ignore = ["id", "batch_size", "beam_size", "start_from", "language_eval", "block_trigrams"]
 
+if opt.vis_soft_assign:
+    infos['opt'].vis_soft_aggsin = True
+
 for k in vars(infos['opt']).keys():
     if k not in ignore:
         if k in vars(opt):
@@ -118,6 +127,7 @@ for k in vars(infos['opt']).keys():
             vars(opt).update({k: vars(infos['opt'])[k]}) # copy over options from model
 
 vocab = infos['vocab'] # ix -> word mapping
+
 
 # Setup the model
 model = models.setup(opt)

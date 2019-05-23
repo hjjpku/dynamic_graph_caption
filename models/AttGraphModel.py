@@ -5,11 +5,15 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
+import random
 import misc.utils as utils
 
 import copy
 import math
 import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib.pyplot import savefig
 
 from .CaptionModel import CaptionModel
 from .AttModel import pack_wrapper, AttModel, Attention
@@ -35,7 +39,7 @@ class ConvOneonOne(nn.Module):
 class ProjectNet(nn.Module):
     """NetVLAD layer implementation"""
 
-    def __init__(self, num_clusters=32, dim=512,alpha = 1,normalize_input=True):
+    def __init__(self, opt, num_clusters=32, dim=512,alpha = 1,normalize_input=True):
         """
         Args:
             num_clusters : int
@@ -55,6 +59,12 @@ class ProjectNet(nn.Module):
         self.conv=ConvOneonOne(dim,num_clusters)
         self.centroids = nn.Parameter(torch.rand(dim,self.num_clusters))
         self._init_params()
+        self.vis_soft_assign = opt.vis_soft_assign
+        if self.vis_soft_assign:
+            self.vis_dir = opt.vis_dir
+            if not os.path.exists(self.vis_dir):
+                os.makedirs(self.vis_dir)
+
 
     def _init_params(self):
         self.conv.weight.data=(2.0 * self.alpha * self.centroids)
@@ -71,6 +81,24 @@ class ProjectNet(nn.Module):
         soft_assign = F.softmax(soft_assign, dim=2) # it should be size B x N x K
         # mask
         soft_assign = soft_assign * mask.unsqueeze(2)
+
+        # calculate assign distribution for KLD loss
+        assign_dist = soft_assign.sum(1).squeeze(1)
+        assign_dist = F.log_softmax(assign_dist, dim=1)
+
+        if self.vis_soft_assign:
+            assign_dist_np = assign_dist.cpu().numpy()
+            for i in range(soft_assign.size()[0]):
+                img_name = self.vis_dir + '/_' + str(random.random()) + '_.jpg'
+                assign_mat = soft_assign[i].cpu().numpy()
+                '''
+                plt.imshow(assign_mat,cmap=plt.cm.hot)
+                plt.xticks(np.arange(assign_mat.shape[0]),assign_mat.shape[0] , rotation=45)
+                plt.yticks(np.arange(assign_mat.shape[0]), assign_mat.shape[0])
+                plt.colorbar()
+                plt.show()
+                plt.savefig(img_name)
+            '''
         x_flatten = x
 
         # calculate residuals to each clusters
@@ -86,7 +114,7 @@ class ProjectNet(nn.Module):
         #vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
         #vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
 
-        return vlad
+        return vlad, assign_dist
 
 class AttGraphModel(AttModel):
     def __init__(self, opt):
@@ -100,6 +128,10 @@ class AttGraphModel(AttModel):
         self.num_layers = 2 # keep the same with topdown
         self.p_dim = opt.p_dim if self.use_proj else opt.rnn_size  # dimension of the graph embeddings
         self.p_dim = opt.rnn_size if (not self.use_graph) or self.use_bn or (self.use_graph and opt.gcn_pool == 'att') else self.p_dim
+        if hasattr(opt, 'proj_KL'):
+            self.proj_KL = opt.proj_KL
+        else:
+            self.proj_KL = False
         '''
         self.p_dim = opt.rnn_size if self.use_bn else opt.p_dim # dimension of the graph embeddings
         if opt.p_dim != opt.rnn_size:
@@ -109,7 +141,7 @@ class AttGraphModel(AttModel):
         #keep fc_embed temporally
         # add project_net
         if self.use_proj:
-            self.project_net = ProjectNet(self.num_k, self.p_dim)
+            self.project_net = ProjectNet(opt, self.num_k, self.p_dim)
             if not self.use_bn:
                 self.graph_embed = nn.Sequential(nn.Linear(self.att_feat_size, self.p_dim),
                                         nn.ReLU(),
@@ -140,18 +172,55 @@ class AttGraphModel(AttModel):
             if not self.use_bn:
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
-            graph_embed = self.project_net.forward(att_feats, att_masks)
+            graph_embed, assign_dist = self.project_net.forward(att_feats, att_masks)
 	
             att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
             if self.use_graph:
-                return fc_feats, graph_embed, pp_att_feats, att_masks #is none
+                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist #is none
             else:
                 # projection but no graph
                 pp_att_feats = self.ctx2att(graph_embed)
-                return fc_feats, graph_embed, pp_att_feats, att_masks
+                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist
         elif self.use_graph:
             #no projection but use graph
-            return fc_feats, att_feats, pp_att_feats, att_masks #is none
+            return fc_feats, att_feats, pp_att_feats, att_masks, None #is none
+
+    def _forward(self, fc_feats, att_feats, seq, att_masks=None):
+        batch_size = fc_feats.size(0)
+        state = self.init_hidden(batch_size)
+
+        outputs = fc_feats.new_zeros(batch_size, seq.size(1) - 1, self.vocab_size+1)
+
+        # Prepare the features
+        p_fc_feats, p_att_feats, pp_att_feats, p_att_masks, assign_dist = self._prepare_feature(fc_feats, att_feats, att_masks)
+        # pp_att_feats is used for attention, we cache it in advance to reduce computation cost
+
+        for i in range(seq.size(1) - 1):
+            if self.training and i >= 1 and self.ss_prob > 0.0: # otherwiste no need to sample
+                sample_prob = fc_feats.new(batch_size).uniform_(0, 1)
+                sample_mask = sample_prob < self.ss_prob
+                if sample_mask.sum() == 0:
+                    it = seq[:, i].clone()
+                else:
+                    sample_ind = sample_mask.nonzero().view(-1)
+                    it = seq[:, i].data.clone()
+                    #prob_prev = torch.exp(outputs[-1].data.index_select(0, sample_ind)) # fetch prev distribution: shape Nx(M+1)
+                    #it.index_copy_(0, sample_ind, torch.multinomial(prob_prev, 1).view(-1))
+                    # prob_prev = torch.exp(outputs[-1].data) # fetch prev distribution: shape Nx(M+1)
+                    prob_prev = torch.exp(outputs[:, i-1].detach()) # fetch prev distribution: shape Nx(M+1)
+                    it.index_copy_(0, sample_ind, torch.multinomial(prob_prev, 1).view(-1).index_select(0, sample_ind))
+            else:
+                it = seq[:, i].clone()
+            # break if all the sequences end
+            if i >= 1 and seq[:, i].sum() == 0:
+                break
+
+            output, state = self.get_logprobs_state(it, p_fc_feats, p_att_feats, pp_att_feats, p_att_masks, state)
+            outputs[:, i] = output
+        if self.use_proj and self.proj_KL:
+            return outputs, assign_dist
+        else:
+            return outputs
 
 class GCN(nn.Module):
     def __init__(self, opt, input_dim, output_dim):

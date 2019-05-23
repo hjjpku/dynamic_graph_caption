@@ -159,6 +159,10 @@ def parse_opt():
                         help = 'dimension of the semantic nodes after projection')
     parser.add_argument('--num_k', type=int, default=20,
                         help = 'number of centers for projection')
+    parser.add_argument('--proj_KL', type=bool, default=False,
+                        help='use KL loss to constrain the projection process')
+    parser.add_argument('--KL_alpha', type=float, default=1,
+                        help='control the weight of KL loss')
 
     #gcn cfg
     parser.add_argument('--use_graph', type=bool, default=False,
@@ -175,6 +179,9 @@ def parse_opt():
                         help = 'number of gcn layers in the gcn')
     parser.add_argument('--gcn_pool', type=str, default='att',
                         help = 'gcn pooling type, max or mean or att')
+
+    parser.add_argument('--vis_soft_assign', type=bool, default=False,
+                        help='visualize soft assign matrix')
 
     args = parser.parse_args()
 

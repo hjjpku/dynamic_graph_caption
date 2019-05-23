@@ -303,7 +303,7 @@ class BlobFetcher():
                                             sampler=SubsetSampler(self.dataloader.split_ix[self.split][self.dataloader.iterators[self.split]:]),
                                             shuffle=False,
                                             pin_memory=True,
-                                            num_workers=8, # 4 is usually enough
+                                            num_workers=12, # 4 is usually enough
                                             collate_fn=lambda x: x[0]))
 
     def _get_next_minibatch_inds(self):

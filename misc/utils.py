@@ -111,6 +111,27 @@ class LanguageModelCriterion(nn.Module):
 
         return output
 
+class LanguageModel_and_KLCriterion(nn.Module):
+    def __init__(self, alpha):
+        super(LanguageModel_and_KLCriterion, self).__init__()
+        self.criterion = nn.KLDivLoss(reduction='sum')
+        self.alpha = alpha
+
+    def forward(self, inputs, target, mask):
+        # truncate to the same size
+        input = inputs[0]
+        assign_dist = inputs[1]
+
+        target = target[:, :input.size(1)]
+        mask =  mask[:, :input.size(1)]
+
+        output = -input.gather(2, target.unsqueeze(2)).squeeze(2) * mask
+        output = torch.sum(output) / torch.sum(mask)
+
+        KL_loss = self.criterion(assign_dist, torch.ones_like(assign_dist)/assign_dist.size()[1])/ assign_dist.size()[0]
+
+        return output +  self.alpha * KL_loss
+
 class LabelSmoothing(nn.Module):
     "Implement label smoothing."
     def __init__(self, size=0, padding_idx=0, smoothing=0.0):
@@ -121,7 +142,7 @@ class LabelSmoothing(nn.Module):
         self.smoothing = smoothing
         # self.size = size
         self.true_dist = None
-        
+
     def forward(self, input, target, mask):
         # truncate to the same size
         target = target[:, :input.size(1)]

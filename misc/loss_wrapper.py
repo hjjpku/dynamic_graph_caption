@@ -9,6 +9,8 @@ class LossWrapper(torch.nn.Module):
         self.model = model
         if opt.label_smoothing > 0:
             self.crit = utils.LabelSmoothing(smoothing=opt.label_smoothing)
+        elif opt.proj_KL:
+            self.crit = utils.LanguageModel_and_KLCriterion(opt.KL_alpha)
         else:
             self.crit = utils.LanguageModelCriterion()
         self.rl_crit = utils.RewardCriterion()
