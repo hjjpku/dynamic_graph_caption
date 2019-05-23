@@ -12,8 +12,8 @@ import misc.utils as utils
 import copy
 import math
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.pyplot import savefig
+#from matplotlib import pyplot as plt
+#from matplotlib.pyplot import savefig
 
 from .CaptionModel import CaptionModel
 from .AttModel import pack_wrapper, AttModel, Attention
