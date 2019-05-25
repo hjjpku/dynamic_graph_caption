@@ -153,19 +153,19 @@ def parse_opt():
 
     # AttGraphModel
     #projection cfg
-    parser.add_argument('--use_proj', type=bool, default=False,
+    parser.add_argument('--use_proj', type=int, default=0,
                         help = 'use projection function to get semantic nodes')
     parser.add_argument('--p_dim', type=int, default=1024,
                         help = 'dimension of the semantic nodes after projection')
     parser.add_argument('--num_k', type=int, default=20,
                         help = 'number of centers for projection')
-    parser.add_argument('--proj_KL', type=bool, default=False,
+    parser.add_argument('--proj_KL', type=int, default=0,
                         help='use KL loss to constrain the projection process')
     parser.add_argument('--KL_alpha', type=float, default=1,
                         help='control the weight of KL loss')
 
     #gcn cfg
-    parser.add_argument('--use_graph', type=bool, default=False,
+    parser.add_argument('--use_graph', type=int, default=0,
                         help = 'use gcn for attention module in decoding')
     parser.add_argument('--gcn_dropout', type=float, default=0.5,
                         help = 'dropout for the linear modules in the gcn')
@@ -180,7 +180,7 @@ def parse_opt():
     parser.add_argument('--gcn_pool', type=str, default='att',
                         help = 'gcn pooling type, max or mean or att')
 
-    parser.add_argument('--vis_soft_assign', type=bool, default=False,
+    parser.add_argument('--vis_soft_assign', type=int, default=0,
                         help='visualize soft assign matrix')
 
     args = parser.parse_args()

@@ -121,6 +121,7 @@ class LanguageModel_and_KLCriterion(nn.Module):
         # truncate to the same size
         input = inputs[0]
         assign_dist = inputs[1]
+        assign_entropy = inputs[2]
 
         target = target[:, :input.size(1)]
         mask =  mask[:, :input.size(1)]
@@ -130,7 +131,7 @@ class LanguageModel_and_KLCriterion(nn.Module):
 
         KL_loss = self.criterion(assign_dist, torch.ones_like(assign_dist)/assign_dist.size()[1])/ assign_dist.size()[0]
 
-        return output +  self.alpha * KL_loss
+        return output +  self.alpha * KL_loss + assign_entropy * 0.2
 
 class LabelSmoothing(nn.Module):
     "Implement label smoothing."

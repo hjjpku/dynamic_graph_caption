@@ -82,9 +82,16 @@ class ProjectNet(nn.Module):
         # mask
         soft_assign = soft_assign * mask.unsqueeze(2)
 
+        # entropy
+        log_p = -torch.log2(soft_assign)
+        log_p[torch.isinf(log_p)] = 0
+        assign_entropy = (soft_assign * log_p).sum()/ mask.sum()
+
         # calculate assign distribution for KLD loss
         assign_dist = soft_assign.sum(1).squeeze(1)
         assign_dist = F.log_softmax(assign_dist, dim=1)
+
+
 
         if self.vis_soft_assign:
             assign_dist_np = assign_dist.cpu().numpy()
@@ -114,7 +121,7 @@ class ProjectNet(nn.Module):
         #vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
         #vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
 
-        return vlad, assign_dist
+        return vlad, assign_dist, assign_entropy
 
 class AttGraphModel(AttModel):
     def __init__(self, opt):
@@ -131,7 +138,7 @@ class AttGraphModel(AttModel):
         if hasattr(opt, 'proj_KL'):
             self.proj_KL = opt.proj_KL
         else:
-            self.proj_KL = False
+            self.proj_KL = 0
         '''
         self.p_dim = opt.rnn_size if self.use_bn else opt.p_dim # dimension of the graph embeddings
         if opt.p_dim != opt.rnn_size:
@@ -172,18 +179,18 @@ class AttGraphModel(AttModel):
             if not self.use_bn:
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
-            graph_embed, assign_dist = self.project_net.forward(att_feats, att_masks)
+            graph_embed, assign_dist, assign_entropy = self.project_net.forward(att_feats, att_masks)
 	
             att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
             if self.use_graph:
-                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist #is none
+                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist, assign_entropy #is none
             else:
                 # projection but no graph
                 pp_att_feats = self.ctx2att(graph_embed)
-                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist
+                return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist, assign_entropy
         elif self.use_graph:
             #no projection but use graph
-            return fc_feats, att_feats, pp_att_feats, att_masks, None #is none
+            return fc_feats, att_feats, pp_att_feats, att_masks, None, None #is none
 
     def _forward(self, fc_feats, att_feats, seq, att_masks=None):
         batch_size = fc_feats.size(0)
@@ -192,7 +199,7 @@ class AttGraphModel(AttModel):
         outputs = fc_feats.new_zeros(batch_size, seq.size(1) - 1, self.vocab_size+1)
 
         # Prepare the features
-        p_fc_feats, p_att_feats, pp_att_feats, p_att_masks, assign_dist = self._prepare_feature(fc_feats, att_feats, att_masks)
+        p_fc_feats, p_att_feats, pp_att_feats, p_att_masks, assign_dist, assign_entropy = self._prepare_feature(fc_feats, att_feats, att_masks)
         # pp_att_feats is used for attention, we cache it in advance to reduce computation cost
 
         for i in range(seq.size(1) - 1):
@@ -218,7 +225,7 @@ class AttGraphModel(AttModel):
             output, state = self.get_logprobs_state(it, p_fc_feats, p_att_feats, pp_att_feats, p_att_masks, state)
             outputs[:, i] = output
         if self.use_proj and self.proj_KL:
-            return outputs, assign_dist
+            return outputs, assign_dist, assign_entropy
         else:
             return outputs
 

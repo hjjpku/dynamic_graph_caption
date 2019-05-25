@@ -117,7 +117,7 @@ if len(opt.id) == 0:
 ignore = ["id", "batch_size", "beam_size", "start_from", "language_eval", "block_trigrams"]
 
 if opt.vis_soft_assign:
-    infos['opt'].vis_soft_aggsin = True
+    infos['opt'].vis_soft_assign = 1
 
 for k in vars(infos['opt']).keys():
     if k not in ignore:
@@ -128,6 +128,7 @@ for k in vars(infos['opt']).keys():
 
 vocab = infos['vocab'] # ix -> word mapping
 
+opt.proj_KL = False # KL loss is no need for evaluation
 
 # Setup the model
 model = models.setup(opt)
