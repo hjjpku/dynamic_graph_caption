@@ -99,7 +99,7 @@ def train(opt):
             if data['bounds']['wrapped']:
                 epoch += 1
                 epoch_done = True
-                np.save('./kmeans/'+ str(epoch-1) + '_center.npy',[kmeans.cluster_centers_])
+                np.save(opt.Kmeans_dir + str(epoch-1) + '_center.npy',[kmeans.cluster_centers_])
 
             # Stop if reaching max epochs
             if epoch >= opt.max_epochs and opt.max_epochs != -1:
@@ -110,7 +110,7 @@ def train(opt):
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
-    np.save('./kmeans/center.npy',[kmeans.cluster_centers_])
+    np.save(opt.Kmeans_dir+ 'center.npy',[kmeans.cluster_centers_])
 
 opt = opts.parse_opt()
 train(opt)

@@ -163,6 +163,13 @@ def parse_opt():
                         help='use KL loss to constrain the projection process')
     parser.add_argument('--KL_alpha', type=float, default=1,
                         help='control the weight of KL loss')
+    parser.add_argument('--Kmeans_dir', type=str, default=None,
+                        help='dir for kmeans center')
+    parser.add_argument('--init_centro', type=int, default=0,
+                        help='if init centroid in projection net with kmeans center')
+    parser.add_argument('--centro_path', type=str, default=None,
+                        help='path to kmeans center numpy file')
+
 
     #gcn cfg
     parser.add_argument('--use_graph', type=int, default=0,

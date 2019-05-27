@@ -55,10 +55,11 @@ class ProjectNet(nn.Module):
         self.num_clusters = num_clusters
         self.alpha = alpha
         self.normalize_input = normalize_input
+        self.dim = dim
 #       self.conv = nn.Conv2d(dim, num_clusters, kernel_size=(1, 1), bias=True)
         self.conv=ConvOneonOne(dim,num_clusters)
         self.centroids = nn.Parameter(torch.rand(dim,self.num_clusters))
-        self._init_params()
+        self._init_params(opt)
         self.vis_soft_assign = opt.vis_soft_assign
         if self.vis_soft_assign:
             self.vis_dir = opt.vis_dir
@@ -66,9 +67,24 @@ class ProjectNet(nn.Module):
                 os.makedirs(self.vis_dir)
 
 
-    def _init_params(self):
+    def _init_params(self, opt):
         self.conv.weight.data=(2.0 * self.alpha * self.centroids)
         self.conv.bias.data= - self.alpha * self.centroids.norm(dim=0)
+
+        #init centroids
+        if not hasattr(opt, 'init_centro'):
+            return
+        if opt.init_centro:
+            assert opt.centro_path, "opt.centro_path should not be empty if opt.init_centro is true"
+            assert os.path.exists(opt.centro_path), "opt.centro_path should not be empty if opt.init_centro is true"
+
+            loaded_centro = np.load(opt.centro_path)
+            loaded_centro_tensor = torch.Tensor( loaded_centro[0]).cuda()
+            loaded_centro_tensor = loaded_centro_tensor.transpose(0,1)
+            assert self.num_clusters == loaded_centro_tensor.size()[1] and self.dim == loaded_centro_tensor.size()[0], "dim of centro para dosen't fit the model"
+            self.centroids.data = loaded_centro_tensor
+
+
 
     def forward(self, x, mask):
         #B, N, C = x.shape[:3]
@@ -130,6 +146,18 @@ class AttGraphModel(AttModel):
         super(AttGraphModel, self).__init__(opt)
         self.opt = opt
 
+        if not hasattr(opt, 'init_centro'):
+            opt.init_centro = 0
+
+        self.init_centro = opt.init_centro
+
+        if hasattr(opt, 'proj_KL'):
+            self.proj_KL = opt.proj_KL
+        else:
+            self.proj_KL = 0
+
+        assert not (opt.init_centro and opt.use_bn), 'init_centro and use_bn should not be set to True together'
+
         # new options
         self.num_k = opt.num_k # number of project centers
         self.use_proj = opt.use_proj # option for projection
@@ -137,24 +165,29 @@ class AttGraphModel(AttModel):
         self.num_layers = 2 # keep the same with topdown
         self.p_dim = opt.p_dim if self.use_proj else opt.rnn_size  # dimension of the graph embeddings
         self.p_dim = opt.rnn_size if (not self.use_graph) or self.use_bn or (self.use_graph and opt.gcn_pool == 'att') else self.p_dim
-        if hasattr(opt, 'proj_KL'):
-            self.proj_KL = opt.proj_KL
-        else:
-            self.proj_KL = 0
-        '''
-        self.p_dim = opt.rnn_size if self.use_bn else opt.p_dim # dimension of the graph embeddings
-        if opt.p_dim != opt.rnn_size:
-            print('graph embedding dim redefined to rnn_size %d because of bn' % self.p_dim)
-        '''
+
+
 
         #keep fc_embed temporally
         # add project_net
         if self.use_proj:
-            self.project_net = ProjectNet(opt, self.num_k, self.p_dim)
+
+            if opt.init_centro:
+                self.project_net = ProjectNet(opt, self.num_k, opt.att_feat_size)
+            else:
+                self.project_net = ProjectNet(opt, self.num_k, self.p_dim)
+
             if not self.use_bn:
-                self.graph_embed = nn.Sequential(nn.Linear(self.att_feat_size, self.p_dim),
+                if self.init_centro:
+                    self.graph_embed = nn.Sequential(nn.BatchNorm1d(self.att_feat_size),
+                                        nn.Linear(self.att_feat_size, self.p_dim),
                                         nn.ReLU(),
-                                        nn.Dropout(self.drop_prob_lm))
+                                        nn.Dropout(self.drop_prob_lm),
+                                        nn.BatchNorm1d(self.p_dim) )
+                else:
+                    self.graph_embed = nn.Sequential(nn.Linear(self.att_feat_size, self.p_dim),
+                                                     nn.ReLU(),
+                                                     nn.Dropout(self.drop_prob_lm))
 
         if self.use_graph:
             del self.ctx2att
@@ -174,15 +207,18 @@ class AttGraphModel(AttModel):
 
         fc_feats = self.fc_embed(fc_feats)
         # dealing with the mask issue for bn layers in att_embed
-        if self.use_bn or not self.use_proj:
+        if (self.use_bn or not self.use_proj) and not self.init_centro:
             att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
         if self.use_proj:
             # graph_embed has a fixed number of nodes
-            if not self.use_bn:
+            if not self.use_bn and not self.init_centro:
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
             graph_embed, assign_dist, assign_entropy = self.project_net.forward(att_feats, att_masks)
-            att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
+            att_masks = att_masks.new(att_masks.size()[0], self.num_k).zero_() + 1
+            if self.init_centro:
+                graph_embed = pack_wrapper(self.graph_embed, graph_embed, att_masks)
+
             if self.use_graph:
                 return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist, assign_entropy #is none
             else:
