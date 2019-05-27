@@ -1,0 +1,9 @@
+*.pyc
+data
+eval_results
+file_log
+kmeans
+log_dir
+vis
+*.jpg
+.idea

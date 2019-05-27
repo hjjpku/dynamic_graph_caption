@@ -85,12 +85,15 @@ class ProjectNet(nn.Module):
         # entropy
         log_p = -torch.log2(soft_assign)
         log_p[torch.isinf(log_p)] = 0
-        assign_entropy = (soft_assign * log_p).sum()/ mask.sum()
-
+        #it should not sum assign_entropy here, because for tensor dim=0,
+        #  dadaparallel module will return a vector of length equal to number of devices used in data parallelism
+        # and will raise error in eval_split() in eval_utils.py
+        # besides, keep in mind that outputs return by dataparalle module should have same dim except for the dim 0
+        # therefor, we sum in dim 1 to avoid the error
+        assign_entropy = (soft_assign * log_p).sum(1)/ mask.sum()
         # calculate assign distribution for KLD loss
         assign_dist = soft_assign.sum(1).squeeze(1)
         assign_dist = F.log_softmax(assign_dist, dim=1)
-
 
 
         if self.vis_soft_assign:
@@ -120,7 +123,6 @@ class ProjectNet(nn.Module):
 
         #vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
         #vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
-
         return vlad, assign_dist, assign_entropy
 
 class AttGraphModel(AttModel):
@@ -180,7 +182,6 @@ class AttGraphModel(AttModel):
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
             graph_embed, assign_dist, assign_entropy = self.project_net.forward(att_feats, att_masks)
-	
             att_masks = att_masks.new(att_masks.size()[0],self.num_k).zero_()+1
             if self.use_graph:
                 return fc_feats, graph_embed, pp_att_feats, att_masks, assign_dist, assign_entropy #is none

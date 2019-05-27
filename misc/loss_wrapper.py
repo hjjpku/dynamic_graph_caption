@@ -19,7 +19,8 @@ class LossWrapper(torch.nn.Module):
                 sc_flag):
         out = {}
         if not sc_flag:
-            loss = self.crit(self.model(fc_feats, att_feats, labels, att_masks), labels[:,1:], masks[:,1:])
+            output = self.model(fc_feats, att_feats, labels, att_masks)
+            loss = self.crit(output, labels[:,1:], masks[:,1:])
         else:
             gen_result, sample_logprobs = self.model(fc_feats, att_feats, att_masks, opt={'sample_max':0}, mode='sample')
             gts = [gts[_] for _ in gt_indices.tolist()]

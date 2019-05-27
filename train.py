@@ -160,7 +160,6 @@ def train(opt):
             
             optimizer.zero_grad()
             model_out = dp_lw_model(fc_feats, att_feats, labels, masks, att_masks, data['gts'], torch.arange(0, len(data['gts'])), sc_flag)
-
             loss = model_out['loss'].mean()
 
             loss.backward()
