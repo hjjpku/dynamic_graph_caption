@@ -68,12 +68,7 @@ class ProjectNet(nn.Module):
 
 
     def _init_params(self, opt):
-        self.conv.weight.data=(2.0 * self.alpha * self.centroids)
-        self.conv.bias.data= - self.alpha * self.centroids.norm(dim=0)
 
-        #init centroids
-        if not hasattr(opt, 'init_centro'):
-            return
         if opt.init_centro:
             assert opt.centro_path, "opt.centro_path should not be empty if opt.init_centro is true"
             assert os.path.exists(opt.centro_path), "opt.centro_path should not be empty if opt.init_centro is true"
@@ -81,9 +76,12 @@ class ProjectNet(nn.Module):
             loaded_centro = np.load(opt.centro_path)
             loaded_centro_tensor = torch.Tensor( loaded_centro[0]).cuda()
             loaded_centro_tensor = loaded_centro_tensor.transpose(0,1)
+            loaded_centro_tensor = F.normalize(loaded_centro_tensor, p=2, dim=0)
             assert self.num_clusters == loaded_centro_tensor.size()[1] and self.dim == loaded_centro_tensor.size()[0], "dim of centro para dosen't fit the model"
             self.centroids.data = loaded_centro_tensor
 
+        self.conv.weight.data=(2.0 * self.alpha * self.centroids)
+        self.conv.bias.data= - self.alpha * self.centroids.norm(dim=0)
 
 
     def forward(self, x, mask):
@@ -137,9 +135,14 @@ class ProjectNet(nn.Module):
         vlad = F.normalize(vlad, p=2, dim=1)  # intra-normalization
         vlad = torch.transpose(vlad,1,2) #B X K X C
 
-        #vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
-        #vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
-        return vlad, assign_dist, assign_entropy
+        proj_nodes = vlad.clone()
+
+        vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
+        vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
+
+
+
+        return proj_nodes, assign_dist, assign_entropy
 
 class AttGraphModel(AttModel):
     def __init__(self, opt):
