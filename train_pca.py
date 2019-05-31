@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 import numpy as np
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.decomposition import IncrementalPCA
 
 import time
 import os
@@ -60,8 +60,7 @@ def train(opt):
     loader.split_ix = infos.get('split_ix', loader.split_ix)
 
 
-    kmeans = MiniBatchKMeans(n_clusters=opt.num_k, batch_size=opt.batch_size*30,
-                             random_state=0)
+    pca = IncrementalPCA(n_components=opt.att_feat_size, whiten=True, copy=True, batch_size=opt.batch_size)
 
     epoch_done = True
 
@@ -86,9 +85,16 @@ def train(opt):
                 tmp = att_feats[i][0:offset]
                 tmp_feats[count:count+offset] = tmp
                 count = count + offset
-            att_feats = tmp_feats[0:opt.batch_size*30]
-            att_feats = att_feats.numpy()
-            kmeans.partial_fit(att_feats)
+            att_feats = tmp_feats[0:count]
+
+            rd = int(count/opt.num_k)
+
+            feat = torch.zeros(rd, opt.num_k*opt.att_feat_size)
+            for i in range(rd):
+                feat[i] = torch.cat(tuple(att_feats[i*opt.num_k:(i+1)*opt.num_k]),dim=0)
+            feat = feat[0:opt.batch_size]
+            feat = feat.numpy()
+            pca.partial_fit(feat)
             end = time.time()
 
             print("iter {} (epoch {}),  time/batch = {:.3f}" \
@@ -96,24 +102,18 @@ def train(opt):
 
             # Update the iteration and epoch
             iteration += 1
-            if iteration >= 55:
-                np.save(opt.Kmeans_dir + str(epoch - 1) + '_center.npy', [kmeans.cluster_centers_])
-                break
-            if data['bounds']['wrapped']:
-                epoch += 1
-                epoch_done = True
-                np.save(opt.Kmeans_dir + str(epoch-1) + '_center.npy',[kmeans.cluster_centers_])
+
 
             # Stop if reaching max epochs
             if epoch >= opt.max_epochs and opt.max_epochs != -1:
                 break
     except (RuntimeError, KeyboardInterrupt):
         print('Save ckpt on exception ...')
-        np.save('center.npy',[kmeans.cluster_centers_])
+
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
-    np.save(opt.Kmeans_dir+ 'center.npy',[kmeans.cluster_centers_])
+    np.save(opt.PCA_dir+ str(opt.num_k) +'.npy',[pca])
 
 opt = opts.parse_opt()
 train(opt)

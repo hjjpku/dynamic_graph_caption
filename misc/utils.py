@@ -121,9 +121,6 @@ class LanguageModel_and_KLCriterion(nn.Module):
         # truncate to the same size
         input = inputs[0]
         assign_dist = inputs[1]
-        assign_entropy = inputs[2]
-        #print(assign_entropy.size())
-        assign_entropy = assign_entropy.sum()
 
         target = target[:, :input.size(1)]
         mask =  mask[:, :input.size(1)]
@@ -131,7 +128,7 @@ class LanguageModel_and_KLCriterion(nn.Module):
         output = -input.gather(2, target.unsqueeze(2)).squeeze(2) * mask
         output = torch.sum(output) / torch.sum(mask)
         KL_loss = self.criterion(assign_dist, torch.ones_like(assign_dist)/assign_dist.size()[1])/ assign_dist.size()[0]
-        output = output +  self.alpha * KL_loss + assign_entropy * 0.2
+        output = output +  self.alpha * KL_loss
         return output
 
 class LabelSmoothing(nn.Module):
