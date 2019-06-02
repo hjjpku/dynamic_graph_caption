@@ -103,6 +103,8 @@ def train(opt):
             # Update the iteration and epoch
             iteration += 1
 
+            if data['bounds']['wrapped']:
+                epoch += 1
 
             # Stop if reaching max epochs
             if epoch >= opt.max_epochs and opt.max_epochs != -1:

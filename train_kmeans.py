@@ -96,9 +96,7 @@ def train(opt):
 
             # Update the iteration and epoch
             iteration += 1
-            if iteration >= 55:
-                np.save(opt.Kmeans_dir + str(epoch - 1) + '_center.npy', [kmeans.cluster_centers_])
-                break
+
             if data['bounds']['wrapped']:
                 epoch += 1
                 epoch_done = True

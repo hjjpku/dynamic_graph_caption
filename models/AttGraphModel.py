@@ -312,8 +312,15 @@ class StructureAttention(nn.Module):
         super(StructureAttention, self).__init__()
         self.topk = opt.topk # ratio
         self.norm = opt.norm_type
+        '''
         self.embed1 = nn.Linear(input_dim, output_dim)
         self.embed2 = nn.Linear(input_dim, output_dim)
+        '''
+        self.embed1 = nn.Sequential(nn.BatchNorm1d(input_dim),
+                                        nn.Linear(input_dim, output_dim) )
+
+        self.embed2 = nn.Sequential(nn.BatchNorm1d(input_dim),
+                                        nn.Linear(input_dim, output_dim))
 
     def _adj_norm(self, Adj):
         if self.norm == 'row':
@@ -340,7 +347,8 @@ class StructureAttention(nn.Module):
         input = torch.cat((graph_embed, expanded_h), 2)
         input = input * mask.unsqueeze(2)
 
-        Adj = torch.bmm(self.embed1(input), self.embed2(input).transpose(1,2)) # b x n x n
+        #Adj = torch.bmm(self.embed1(input), self.embed2(input).transpose(1,2)) # b x n x n
+        Adj = torch.bmm(pack_wrapper(self.embed1, input, mask), pack_wrapper(self.embed2, input, mask).transpose(1,2))
         min_v = Adj.min(2)[0].min(1)[0]
         Adj = Adj - min_v.unsqueeze(1).unsqueeze(2).expand(Adj.size())
         Adj = Adj * mask.unsqueeze(2)
