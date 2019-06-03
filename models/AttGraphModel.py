@@ -315,13 +315,7 @@ class StructureAttention(nn.Module):
 
         self.embed1 = nn.Linear(input_dim, output_dim)
         self.embed2 = nn.Linear(input_dim, output_dim)
-        '''
-        self.embed1 = nn.Sequential(nn.BatchNorm1d(input_dim),
-                                        nn.Linear(input_dim, output_dim) )
 
-        self.embed2 = nn.Sequential(nn.BatchNorm1d(input_dim),
-                                        nn.Linear(input_dim, output_dim))
-        '''
     def _adj_norm(self, Adj):
         if self.norm == 'row':
             rowsum = Adj.sum(2) # b x n
@@ -331,7 +325,7 @@ class StructureAttention(nn.Module):
             Adj_norm = d_inv_sqrt * Adj * d_inv_sqrt.transpose(1,2)
         elif self.norm == 'global':
             sum = Adj.sum(2).sum(1)
-            Adj_norm = Adj / sum
+            Adj_norm = Adj / sum.unsqueeze(1).unsqueeze(2)
         else:
             print('no norm type for Adj')
             exit(-1)
