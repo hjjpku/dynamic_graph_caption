@@ -312,7 +312,7 @@ class StructureAttention(nn.Module):
         super(StructureAttention, self).__init__()
         self.topk = opt.topk # ratio
         self.norm = opt.norm_type
-        '''
+
         self.embed1 = nn.Linear(input_dim, output_dim)
         self.embed2 = nn.Linear(input_dim, output_dim)
         '''
@@ -321,7 +321,7 @@ class StructureAttention(nn.Module):
 
         self.embed2 = nn.Sequential(nn.BatchNorm1d(input_dim),
                                         nn.Linear(input_dim, output_dim))
-
+        '''
     def _adj_norm(self, Adj):
         if self.norm == 'row':
             rowsum = Adj.sum(2) # b x n
