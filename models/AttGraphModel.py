@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import random
+from sklearn.decomposition import IncrementalPCA
 import misc.utils as utils
 
 import copy
@@ -52,6 +53,17 @@ class ProjectNet(nn.Module):
                 If true, descriptor-wise L2 normalization is applied to input.
         """
         super(ProjectNet, self).__init__()
+
+        self.use_vlad = opt.use_vlad
+
+        if self.use_vlad:
+            pca = np.load(opt.PCA_dir)[0]
+            self.pca_mean = torch.Tensor(pca.mean_).cuda()
+            self.pca_comp = torch.Tensor(pca.components_)[0:opt.rnn_size].transpose(0,1).cuda() # (n x att_size) x rnn_size
+            # pca.whiten_ is True
+            self.pca_exp_var = torch.Tensor(pca.explained_variance_)[0:opt.rnn_size].cuda()
+
+
         self.num_clusters = num_clusters
         self.alpha = alpha
         self.normalize_input = normalize_input
@@ -139,12 +151,19 @@ class ProjectNet(nn.Module):
 
         proj_nodes = vlad.clone()
 
-        vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
-        vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
+        if self.use_vlad:
+            vlad = vlad.contiguous().view(x.size(0), -1)  # flatten
+            vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
+            #pca
+            vlad = vlad - self.pca_mean
+            vlad = torch.matmul(vlad, self.pca_comp)
+            #whiten
+            vlad = vlad / self.pca_exp_var
 
+        else:
+            vlad = None
 
-
-        return proj_nodes, assign_dist
+        return proj_nodes, assign_dist, vlad
 
 class AttGraphModel(AttModel):
     def __init__(self, opt):
@@ -171,7 +190,11 @@ class AttGraphModel(AttModel):
         self.p_dim = opt.p_dim if self.use_proj else opt.rnn_size  # dimension of the graph embeddings
         self.p_dim = opt.rnn_size if (not self.use_graph) or self.use_bn or (self.use_graph and opt.gcn_pool == 'att') else self.p_dim
 
-
+        if not hasattr(opt, 'use_vlad'):
+            opt.use_vlad = 0
+        self.use_vlad = opt.use_vlad
+        if opt.use_vlad:
+            del self.fc_embed
 
         #keep fc_embed temporally
         # add project_net
@@ -202,6 +225,7 @@ class AttGraphModel(AttModel):
         if not self.use_bn and self.use_proj:
             del self.att_embed
 
+
         self.core = AttGraphCore(opt)
         print(self.use_proj)
         print(self.use_graph)
@@ -209,8 +233,8 @@ class AttGraphModel(AttModel):
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
         graph_embed, pp_att_feats =  None, None
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
-
-        fc_feats = self.fc_embed(fc_feats)
+        if not self.use_vlad:
+            fc_feats = self.fc_embed(fc_feats)
         # dealing with the mask issue for bn layers in att_embed
         if (self.use_bn or not self.use_proj) and not self.init_centro:
             att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
@@ -219,7 +243,9 @@ class AttGraphModel(AttModel):
             if not self.use_bn and not self.init_centro:
                 graph_embed_t = self.graph_embed(att_feats)
                 att_feats = graph_embed_t
-            graph_embed, assign_dist = self.project_net.forward(att_feats, att_masks)
+            graph_embed, assign_dist, vlad = self.project_net.forward(att_feats, att_masks)
+            if self.use_vlad:
+                fc_feats = vlad
             att_masks = att_masks.new(att_masks.size()[0], self.num_k).zero_() + 1
             if self.init_centro:
                 graph_embed = pack_wrapper(self.graph_embed, graph_embed, att_masks)
@@ -384,6 +410,7 @@ class AttGraphCore(nn.Module):
         self.p_dim = opt.p_dim if opt.use_proj else opt.rnn_size  # dimension of the graph embed
         self.p_dim = opt.rnn_size if not self.use_graph or (self.use_graph and self.gcn_pool == 'att') else self.p_dim # keep same dim with settings in Attention module if not use graph
         self.drop_prob_lm = opt.drop_prob_lm
+        self.eps = 1e-10
 
         self.att_lstm = nn.LSTMCell(opt.input_encoding_size + opt.rnn_size * 2, opt.rnn_size)  # we, fc, h^2_t-1
         self.lang_lstm = nn.LSTMCell(opt.rnn_size * 2, opt.rnn_size)  # h^1_t, \hat v
