@@ -121,7 +121,10 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         # Print beam search
         if beam_size > 1 and verbose_beam:
             for i in range(loader.batch_size):
-                print('\n'.join([utils.decode_sequence(loader.get_vocab(), _['seq'].unsqueeze(0))[0] for _ in model.module.done_beams[i]]))
+                if hasattr(model, 'done_beams'):
+                    print('\n'.join([utils.decode_sequence(loader.get_vocab(), _['seq'].unsqueeze(0))[0] for _ in model.done_beams[i]]))
+                else:
+                    print('\n'.join([utils.decode_sequence(loader.get_vocab(), _['seq'].unsqueeze(0))[0] for _ in model.module.done_beams[i]]))
                 print('--' * 10)
         sents = utils.decode_sequence(loader.get_vocab(), seq)
 
