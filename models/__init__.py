@@ -15,6 +15,7 @@ from .OldModel import ShowAttendTellModel, AllImgModel
 from .AttModel import *
 from .TransformerModel import TransformerModel
 from .AttGraphModel import AttGraphModel
+from .NewTopDown import NewTopDown
 
 def setup(opt):
     if opt.caption_model == 'fc':
@@ -42,6 +43,8 @@ def setup(opt):
     # Top-down attention model
     elif opt.caption_model == 'topdown':
         model = TopDownModel(opt)
+    elif opt.caption_model == 'newtopdown':
+        model = NewTopDown(opt)
     # StackAtt
     elif opt.caption_model == 'stackatt':
         model = StackAttModel(opt)

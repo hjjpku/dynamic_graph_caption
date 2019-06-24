@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
+from torch import autograd
 import torch.nn as nn
 import torch.optim as optim
 
@@ -159,10 +160,17 @@ def train(opt):
             fc_feats, att_feats, labels, masks, att_masks = tmp
             
             optimizer.zero_grad()
-            model_out = dp_lw_model(fc_feats, att_feats, labels, masks, att_masks, data['gts'], torch.arange(0, len(data['gts'])), sc_flag)
+            '''
+            with autograd.detect_anomaly():
+                model_out = dp_lw_model(fc_feats, att_feats, labels, masks, att_masks, data['gts'], torch.arange(0, len(data['gts'])), sc_flag)
+                loss = model_out['loss'].mean()
+                loss.backward()
+                '''
+            model_out = dp_lw_model(fc_feats, att_feats, labels, masks, att_masks, data['gts'],
+                                    torch.arange(0, len(data['gts'])), sc_flag)
             loss = model_out['loss'].mean()
-
             loss.backward()
+
             utils.clip_gradient(optimizer, opt.grad_clip)
             optimizer.step()
             train_loss = loss.item()

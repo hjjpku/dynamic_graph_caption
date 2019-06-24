@@ -103,6 +103,7 @@ class AttModel(CaptionModel):
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
 
         # embed fc and att feats
+        #fc_feats = fc_feats * 0
         fc_feats = self.fc_embed(fc_feats)
         # dealing with the mask issue for bn layers in att_embed
         att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
@@ -116,7 +117,7 @@ class AttModel(CaptionModel):
     def _forward(self, fc_feats, att_feats, seq, att_masks=None):
         batch_size = fc_feats.size(0)
         state = self.init_hidden(batch_size)
-
+        #print(state[0][0],state[1][0])
         outputs = fc_feats.new_zeros(batch_size, seq.size(1) - 1, self.vocab_size+1)
 
         # Prepare the features

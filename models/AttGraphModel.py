@@ -233,6 +233,7 @@ class AttGraphModel(AttModel):
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
         graph_embed, pp_att_feats =  None, None
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
+        #fc_feats = fc_feats * 0
         if not self.use_vlad:
             fc_feats = self.fc_embed(fc_feats)
         # dealing with the mask issue for bn layers in att_embed
@@ -342,12 +343,13 @@ class StructureAttention(nn.Module):
         self.embed1 = nn.Linear(input_dim, output_dim)
         self.embed2 = nn.Linear(input_dim, output_dim)
 
-    def _adj_norm(self, Adj):
+    def _adj_norm(self, Adj, mask):
         if self.norm == 'row':
-            rowsum = Adj.sum(2) # b x n
+            rowsum = Adj.sum(2) + 1e-20 # b x n
             d_inv_sqrt = torch.pow(rowsum, -1/2)
-            d_inv_sqrt[torch.isinf(d_inv_sqrt)] = 0
+            #d_inv_sqrt[torch.isinf(d_inv_sqrt)] = 0
             d_inv_sqrt = d_inv_sqrt.unsqueeze(2).expand(-1,-1,d_inv_sqrt.size()[1])
+            d_inv_sqrt = d_inv_sqrt * mask.unsqueeze(2)
             Adj_norm = d_inv_sqrt * Adj * d_inv_sqrt.transpose(1,2)
         elif self.norm == 'global':
             sum = Adj.sum(2).sum(1)
@@ -367,7 +369,9 @@ class StructureAttention(nn.Module):
         input = torch.cat((graph_embed, expanded_h), 2)
         input = input * mask.unsqueeze(2)
 
-        Adj = torch.bmm(self.embed1(input), self.embed2(input).transpose(1,2)) # b x n x n
+        embed1 = self.embed1(input) * mask.unsqueeze(2)
+        embed2 = (self.embed2(input) * mask.unsqueeze(2)).transpose(1,2)
+        Adj = torch.bmm(embed1 , embed2) # b x n x n
         #Adj = torch.bmm(pack_wrapper(self.embed1, input, mask), pack_wrapper(self.embed2, input, mask).transpose(1,2))
         min_v = Adj.min(2)[0].min(1)[0]
         Adj = Adj - min_v.unsqueeze(1).unsqueeze(2).expand(Adj.size())
@@ -380,8 +384,8 @@ class StructureAttention(nn.Module):
         topk_mask = torch.zeros_like(Adj).scatter_(2, top_idx, torch.ones_like(top_idx).float()) # b x n x n
         #print(topk_mask[0][0])
         Adj = Adj * topk_mask
-        Adj_norm =  self._adj_norm(Adj)
-
+        Adj_norm =  self._adj_norm(Adj, mask)
+        #Adj_norm = Adj
         return Adj_norm
 
 class BuildGraph(nn.Module):
@@ -448,6 +452,7 @@ class AttGraphCore(nn.Module):
             expanded_h = prev_h.unsqueeze(1).expand(-1, graph_embed.size()[1], -1)
             gcn_input = torch.cat((graph_embed, expanded_h), 2)
             gcn_input = gcn_input * att_mask.unsqueeze(2)
+            gcn_input = F.normalize(gcn_input, p=2, dim=2)
             for gcn_layer in self.gcn:
                 gcn_input = gcn_layer(gcn_input, Adj, att_mask)
             att_graph = gcn_input.clone()
