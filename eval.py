@@ -102,6 +102,9 @@ opt = parser.parse_args()
 with open(opt.infos_path) as f:
     infos = utils.pickle_load(f)
 
+print('epoch: ' + str(infos['epoch']))
+print('iteration: ' + str(infos['iter']))
+
 # override and collect parameters
 if len(opt.input_fc_dir) == 0:
     opt.input_fc_dir = infos['opt'].input_fc_dir
