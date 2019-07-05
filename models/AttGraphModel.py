@@ -339,18 +339,35 @@ class StructureAttention(nn.Module):
         super(StructureAttention, self).__init__()
         self.topk = opt.topk # ratio
         self.norm = opt.norm_type
-
-        self.embed1 = nn.Linear(input_dim, output_dim)
-        self.embed2 = nn.Linear(input_dim, output_dim)
+        if not  hasattr(opt,'norm_concat'):
+            opt.norm_concat = 0
+        self.norm_concat = opt.norm_concat
+        if not hasattr(opt,'directed'):
+            opt.directed = 1
+        self.directed = opt.directed #directed graph or undirected graph
+        if opt.directed:
+            self.embed1 = nn.Linear(input_dim, output_dim)
+            self.embed2 = nn.Linear(input_dim, output_dim)
+        else:
+            self.embed1 = nn.Linear(input_dim, output_dim)
 
     def _adj_norm(self, Adj, mask):
         if self.norm == 'row':
+
             rowsum = Adj.sum(2) + 1e-20 # b x n
             d_inv_sqrt = torch.pow(rowsum, -1/2)
             #d_inv_sqrt[torch.isinf(d_inv_sqrt)] = 0
             d_inv_sqrt = d_inv_sqrt.unsqueeze(2).expand(-1,-1,d_inv_sqrt.size()[1])
             d_inv_sqrt = d_inv_sqrt * mask.unsqueeze(2)
             Adj_norm = d_inv_sqrt * Adj * d_inv_sqrt.transpose(1,2)
+            '''
+            mask_expd = (torch.bmm(mask.unsqueeze(2), mask.unsqueeze(2).transpose(1,2)) - 1) * 1e10
+            
+            Adj = F.normalize(Adj, p=2, dim=2)
+            Adj = Adj+mask_expd #supress zero padding when operate softmax
+            Adj_norm = F.softmax(Adj,2)
+            Adj_norm = Adj_norm * mask.unsqueeze(2)
+            '''
         elif self.norm == 'global':
             sum = Adj.sum(2).sum(1)
             Adj_norm = Adj / sum.unsqueeze(1).unsqueeze(2)
@@ -366,17 +383,27 @@ class StructureAttention(nn.Module):
         # hidden_state = b x rnn_size
         # mask = b x n
         expanded_h = hidden_state.unsqueeze(1).expand(-1, graph_embed.size()[1], -1)
-        input = torch.cat((graph_embed, expanded_h), 2)
+        if self.norm_concat:
+            input = torch.cat((F.normalize(graph_embed,p=2,dim=2),F.normalize(expanded_h,p=2,dim=2) ), 2)
+        else:
+            input = torch.cat((graph_embed, expanded_h), 2)
+
         input = input * mask.unsqueeze(2)
+        #input = F.normalize(input,p=2,dim=2)
 
         embed1 = self.embed1(input) * mask.unsqueeze(2)
-        embed2 = (self.embed2(input) * mask.unsqueeze(2)).transpose(1,2)
+        if self.directed:
+            embed2 = (self.embed2(input) * mask.unsqueeze(2)).transpose(1,2)
+        else:
+            embed2 = embed1.transpose(1,2)
+
         Adj = torch.bmm(embed1 , embed2) # b x n x n
         #Adj = torch.bmm(pack_wrapper(self.embed1, input, mask), pack_wrapper(self.embed2, input, mask).transpose(1,2))
-        min_v = Adj.min(2)[0].min(1)[0]
-        Adj = Adj - min_v.unsqueeze(1).unsqueeze(2).expand(Adj.size())
-        Adj = Adj * mask.unsqueeze(2)
-
+        if not self.norm_concat and self.directed:
+            min_v = Adj.min(2)[0].min(1)[0]
+            Adj = Adj - min_v.unsqueeze(1).unsqueeze(2).expand(Adj.size())
+            Adj = Adj * mask.unsqueeze(2)
+        '''
         topk = int(math.floor((graph_embed.size()[1] * self.topk)))
         topk_mat = Adj.topk(topk, 2)
         top_idx = topk_mat[1]
@@ -384,7 +411,10 @@ class StructureAttention(nn.Module):
         topk_mask = torch.zeros_like(Adj).scatter_(2, top_idx, torch.ones_like(top_idx).float()) # b x n x n
         #print(topk_mask[0][0])
         Adj = Adj * topk_mask
+        Adj_np = Adj.cpu().numpy()
+        '''
         Adj_norm =  self._adj_norm(Adj, mask)
+        #Adj_norm_np = Adj_norm.cpu().numpy()
         #Adj_norm = Adj
         return Adj_norm
 

@@ -8,3 +8,5 @@ log_dir
 vis
 *.jpg
 .idea
+eval
+*.txt

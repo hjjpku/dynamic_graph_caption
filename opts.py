@@ -190,7 +190,10 @@ def parse_opt():
                         help = 'number of gcn layers in the gcn')
     parser.add_argument('--gcn_pool', type=str, default='att',
                         help = 'gcn pooling type, max or mean or att')
-
+    parser.add_argument('--concat_norm', type=int, default=0,
+                        help='normalize the feature before calculating adj')
+    parser.add_argument('--directed', type=int, default=1,
+                        help='directed graph or undirected graph')
     parser.add_argument('--vis_soft_assign', type=int, default=0,
                         help='visualize soft assign matrix')
 

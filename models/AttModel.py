@@ -570,6 +570,7 @@ class Attention(nn.Module):
         dot = dot.view(-1, att_size)                        # batch * att_size
         
         weight = F.softmax(dot, dim=1)                             # batch * att_size
+        #weight_np = weight.cpu().numpy()
         if att_masks is not None:
             weight = weight * att_masks.view(-1, att_size).float()
             weight = weight / weight.sum(1, keepdim=True) # normalize to 1
