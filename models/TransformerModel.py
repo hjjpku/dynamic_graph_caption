@@ -36,9 +36,9 @@ class EncoderDecoder(nn.Module):
         self.tgt_embed = tgt_embed
         self.generator = generator
         
-    def forward(self, src, tgt, src_mask, tgt_mask):
+    def forward(self, src, tgt, src_mask, tgt_mask): #att_embed, seq, att_mask, seq_mask
         "Take in and process masked src and target sequences."
-        return self.decode(self.encode(src, src_mask), src_mask,
+        return self.decode(self.encode(src, src_mask) , src_mask,
                             tgt, tgt_mask)
     
     def encode(self, src, src_mask):
@@ -109,7 +109,7 @@ class EncoderLayer(nn.Module):
         self.sublayer = clones(SublayerConnection(size, dropout), 2)
         self.size = size
 
-    def forward(self, x, mask):
+    def forward(self, x, mask): # x here is the att_embed
         "Follow Figure 1 (left) for connections."
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
         return self.sublayer[1](x, self.feed_forward)
@@ -136,7 +136,7 @@ class DecoderLayer(nn.Module):
         self.feed_forward = feed_forward
         self.sublayer = clones(SublayerConnection(size, dropout), 3)
  
-    def forward(self, x, memory, src_mask, tgt_mask):
+    def forward(self, x, memory, src_mask, tgt_mask): # x here is seq
         "Follow Figure 1 (right) for connections."
         m = memory
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
@@ -313,6 +313,7 @@ class TransformerModel(AttModel):
             seq_mask = (seq.data > 0)
             seq_mask[:,0] += 1
 
+            # construct mask for word sequence, from b x l to b x l x l
             seq_mask = seq_mask.unsqueeze(-2)
             seq_mask = seq_mask & subsequent_mask(seq.size(-1)).to(seq_mask)
         else:

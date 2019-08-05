@@ -125,6 +125,8 @@ def eval_split(model, crit, loader, eval_kwargs={}):
                     print('\n'.join([utils.decode_sequence(loader.get_vocab(), _['seq'].unsqueeze(0))[0] for _ in model.done_beams[i]]))
                 else:
                     print('\n'.join([utils.decode_sequence(loader.get_vocab(), _['seq'].unsqueeze(0))[0] for _ in model.module.done_beams[i]]))
+                for j in range(5):
+                    print('gt: ' + utils.decode_sequence(loader.get_vocab(), data['labels'][i*5+j:i*5+j+1 ,1:])[0].decode('string_escape'))
                 print('--' * 10)
         sents = utils.decode_sequence(loader.get_vocab(), seq)
 

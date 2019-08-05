@@ -355,7 +355,9 @@ class StructureAttention(nn.Module):
         if self.norm == 'row':
 
             rowsum = Adj.sum(2) + 1e-20 # b x n
+            print('row_sum:' + str((rowsum==0).sum().item()))
             d_inv_sqrt = torch.pow(rowsum, -1/2)
+            print('d_inv_sqrt:' + str(torch.isnan(d_inv_sqrt) .sum().item()) + '--' + str(torch.isinf(d_inv_sqrt ).sum().item()))
             #d_inv_sqrt[torch.isinf(d_inv_sqrt)] = 0
             d_inv_sqrt = d_inv_sqrt.unsqueeze(2).expand(-1,-1,d_inv_sqrt.size()[1])
             d_inv_sqrt = d_inv_sqrt * mask.unsqueeze(2)
@@ -395,14 +397,16 @@ class StructureAttention(nn.Module):
         if self.directed:
             embed2 = (self.embed2(input) * mask.unsqueeze(2)).transpose(1,2)
         else:
-            embed2 = embed1.transpose(1,2)
-
+            embed2 = embed1.transpose(1,2).clone()
+        print('embed1:' + str(torch.isnan(embed1).sum().item()) + '--' + str(torch.isinf(embed1).sum().item()) )
         Adj = torch.bmm(embed1 , embed2) # b x n x n
         #Adj = torch.bmm(pack_wrapper(self.embed1, input, mask), pack_wrapper(self.embed2, input, mask).transpose(1,2))
         if not self.norm_concat and self.directed:
             min_v = Adj.min(2)[0].min(1)[0]
             Adj = Adj - min_v.unsqueeze(1).unsqueeze(2).expand(Adj.size())
             Adj = Adj * mask.unsqueeze(2)
+
+        print('Adj0:' + str(torch.isnan(Adj).sum().item())+ '--' + str(torch.isinf(Adj).sum().item()) )
         '''
         topk = int(math.floor((graph_embed.size()[1] * self.topk)))
         topk_mat = Adj.topk(topk, 2)
@@ -414,6 +418,7 @@ class StructureAttention(nn.Module):
         Adj_np = Adj.cpu().numpy()
         '''
         Adj_norm =  self._adj_norm(Adj, mask)
+        print('Adj1:' + str(torch.isnan(Adj_norm).sum().item())+ '--' + str(torch.isinf(Adj_norm).sum().item()) )
         #Adj_norm_np = Adj_norm.cpu().numpy()
         #Adj_norm = Adj
         return Adj_norm

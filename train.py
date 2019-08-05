@@ -160,7 +160,7 @@ def train(opt):
             fc_feats, att_feats, labels, masks, att_masks = tmp
             
             optimizer.zero_grad()
-
+            '''
             with autograd.detect_anomaly():
                 model_out = dp_lw_model(fc_feats, att_feats, labels, masks, att_masks, data['gts'], torch.arange(0, len(data['gts'])), sc_flag)
                 loss = model_out['loss'].mean()
@@ -170,7 +170,7 @@ def train(opt):
                                     torch.arange(0, len(data['gts'])), sc_flag)
             loss = model_out['loss'].mean()
             loss.backward()
-            '''
+
             utils.clip_gradient(optimizer, opt.grad_clip)
             optimizer.step()
             train_loss = loss.item()

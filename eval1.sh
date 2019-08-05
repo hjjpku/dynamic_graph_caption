@@ -1,8 +1,8 @@
 #!/bin/bash
 
-model_dir="attgraph_kmeans_e10_maxp"
-model="attgraph"
-info_start=`expr 168000 - 6000 \* 6`
+model_dir="log_trans_bn"
+model="trans"
+info_start=`expr 156000 - 6000 \* 20`
 echo $info_start
 stride=12000
 info_id=$info_start
@@ -18,7 +18,7 @@ do
 	echo ${info_path}
 	echo ${result_path}
 
-	CUDA_VISIBLE_DEVICES=0 python eval.py --model ${model_path} --infos ${info_path} --dump_images 0 --num_images 5000 --language_eval 1 &> ${result_path}
+	CUDA_VISIBLE_DEVICES=1 python eval.py --model ${model_path} --infos ${info_path} --dump_images 0 --num_images 5000 --language_eval 1 &> ${result_path}
 	let "loop++"
 	let "info_id+=${stride}"
 done
